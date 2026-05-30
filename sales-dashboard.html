@@ -536,7 +536,97 @@ function load() {
 function onInput(brand, val) {
   actuals[brand] = parseNum(val);
   save();
-  renderAll();
+  // 입력창은 건드리지 않고 결과값만 업데이트
+  updateBrandResults(brand);
+  renderAllTab();
+}
+
+// 브랜드 패널에서 입력창 제외하고 결과만 업데이트
+function updateBrandResults(brand) {
+  const dp = getDayProgress();
+  const target = TARGET_DATA[brand][selectedDate] || 0;
+  const actual = actuals[brand] || 0;
+  const pct = target > 0 ? actual/target*100 : 0;
+  const barW = Math.min(pct,100).toFixed(1);
+  const barCls = getBarClass(pct);
+  const timePct = (dp.pct*100).toFixed(1);
+  const gap = actual - target;
+  const remH = Math.floor(dp.remaining/3600);
+  const remM = Math.floor((dp.remaining%3600)/60);
+  const elH  = Math.floor(dp.elapsed/3600);
+  const elM  = Math.floor((dp.elapsed%3600)/60);
+
+  // 요약 카드
+  const sc = document.querySelector(`#panel-${brand} .summary-row`);
+  if (sc) sc.innerHTML = `
+    <div class="stat-card">
+      <div class="s-label">일 목표</div>
+      <div class="s-val" style="color:${BRAND_COLOR[brand]}">${fmt(target)}</div>
+      <div class="s-sub">${selectedDate}</div>
+    </div>
+    <div class="stat-card">
+      <div class="s-label">현재 실적</div>
+      <div class="s-val">${fmt(actual)}</div>
+      <div class="s-sub" style="color:${gap>=0?'var(--success)':'var(--danger)'}">${gap>=0?'+':''}${fmt(gap)}</div>
+    </div>
+    <div class="stat-card">
+      <div class="s-label">달성률</div>
+      <div class="s-val" style="color:${pct>=100?'var(--success)':pct>=70?'':pct>=40?'var(--warn)':'var(--danger)'}">${pct.toFixed(1)}%</div>
+      <div class="s-sub">목표 대비</div>
+    </div>
+    <div class="stat-card">
+      <div class="s-label">마감까지</div>
+      <div class="s-val">${remH}h ${remM}m</div>
+      <div class="s-sub">경과 ${elH}h ${elM}m (${(dp.pct*100).toFixed(0)}%)</div>
+    </div>`;
+
+  // 진도율 바
+  const bf = document.querySelector(`#panel-${brand} .bar-fill`);
+  const bt = document.querySelector(`#panel-${brand} .bar-time-marker`);
+  const pp = document.querySelector(`#panel-${brand} .prog-pct`);
+  if (bf) { bf.style.width = barW+'%'; bf.className = 'bar-fill '+barCls; }
+  if (bt) bt.style.left = timePct+'%';
+  if (pp) { pp.textContent = pct.toFixed(1)+'%'; pp.style.color = pct>=100?'var(--success)':pct>=70?BRAND_COLOR[brand]:pct>=40?'var(--warn)':'var(--danger)'; }
+
+  // 시나리오 tbody
+  const tbody = document.querySelector(`#panel-${brand} .sim-table tbody`);
+  if (tbody) tbody.innerHTML = SCENARIOS.map(sc => {
+    const proj = calcProjected(actual, dp, sc.pace);
+    const rate = target > 0 ? proj/target*100 : 0;
+    const diff = proj - target;
+    return `<tr>
+      <td><span class="s-name ${sc.cls}">${sc.name}</span></td>
+      <td><div class="pace-bar">
+        <div class="pace-bg"><div class="pace-fill" style="width:${Math.min(sc.pace*66,100)}%;background:${sc.pace>=1?'var(--success)':sc.pace>=0.6?'var(--warn)':'var(--muted)'}"></div></div>
+        <span style="font-size:0.78rem;color:var(--muted)">${(sc.pace*100).toFixed(0)}%</span>
+      </div></td>
+      <td style="font-weight:700">${fmt(Math.round(proj))}</td>
+      <td>${getRateChip(rate)}</td>
+      <td style="color:${diff>=0?'var(--success)':'var(--danger)'};font-weight:600">${diff>=0?'+':''}${fmt(Math.round(diff))}</td>
+    </tr>`;
+  }).join('');
+
+  // 필요 매출 행
+  const needed = target - actual;
+  const needPerHour = dp.remaining > 0 ? needed/(dp.remaining/3600) : 0;
+  const needRow = document.querySelector(`#panel-${brand} .need-row`);
+  const simSec = document.querySelector(`#panel-${brand} .sim-section`);
+  if (simSec) {
+    let nr = simSec.querySelector('.need-row');
+    if (!nr) { nr = document.createElement('div'); nr.className='need-row'; simSec.appendChild(nr); }
+    if (needed > 0 && dp.remaining > 0) {
+      nr.style.display = 'flex';
+      nr.innerHTML = `
+        <div class="need-item"><div class="n-label">목표까지 남은 금액</div><div class="n-val" style="color:var(--danger)">${fmt(needed)}</div></div>
+        <div class="need-item"><div class="n-label">시간당 필요 매출</div><div class="n-val" style="color:var(--warn)">${fmt(Math.round(needPerHour))}</div></div>
+        <div class="need-item"><div class="n-label">분당 필요 매출</div><div class="n-val">${fmt(Math.round(needPerHour/60))}</div></div>`;
+    } else if (needed <= 0 && actual > 0) {
+      nr.style.display = 'flex';
+      nr.innerHTML = `<div class="need-item"><div class="n-label">초과 달성</div><div class="n-val" style="color:var(--success)">+${fmt(Math.abs(gap))} 🎉</div></div>`;
+    } else {
+      nr.style.display = 'none';
+    }
+  }
 }
 
 // ───────── 전체 렌더 ─────────
