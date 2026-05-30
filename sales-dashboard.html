@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>브랜드 매출 대시보드</title>
+<style>
+:root {
+  --bg: #0f1117;
+  --surface: #1a1d27;
+  --card: #20243a;
+  --border: #2e3250;
+  --accent: #6c63ff;
+  --accent2: #00d4aa;
+  --warn: #f59e0b;
+  --danger: #ef4444;
+  --success: #22c55e;
+  --text: #e2e8f0;
+  --muted: #64748b;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; min-height: 100vh; padding: 24px; }
+
+header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; flex-wrap: wrap; gap: 12px; }
+header h1 { font-size: 1.4rem; font-weight: 700; background: linear-gradient(135deg, #6c63ff, #00d4aa); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+#clock { font-size: 0.85rem; color: var(--muted); background: var(--surface); padding: 6px 14px; border-radius: 20px; border: 1px solid var(--border); }
+
+/* config bar */
+.config-bar { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 12px 18px; margin-bottom: 20px; display: flex; align-items: center; gap: 20px; flex-wrap: wrap; font-size: 0.82rem; color: var(--muted); }
+.config-bar label { display: flex; align-items: center; gap: 8px; }
+.config-bar input[type="time"] { background: var(--card); border: 1px solid var(--border); border-radius: 6px; color: var(--text); padding: 4px 10px; font-size: 0.82rem; outline: none; }
+#dayInfo { margin-left: auto; color: var(--accent2); font-weight: 600; }
+
+/* date selector */
+.date-row { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; }
+.date-row label { font-size: 0.82rem; color: var(--muted); }
+.date-row select { background: var(--card); border: 1px solid var(--border); border-radius: 8px; color: var(--text); padding: 7px 14px; font-size: 0.85rem; outline: none; cursor: pointer; }
+.date-row select:focus { border-color: var(--accent); }
+.today-badge { background: var(--accent); color: #fff; font-size: 0.72rem; padding: 3px 10px; border-radius: 20px; font-weight: 600; }
+
+/* brand cards */
+.brands-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; margin-bottom: 24px; }
+
+.brand-card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 20px; }
+.brand-card h3 { font-size: 1rem; font-weight: 700; margin-bottom: 14px; display: flex; justify-content: space-between; align-items: center; }
+.brand-card h3 span.tag { font-size: 0.68rem; background: var(--card); padding: 2px 8px; border-radius: 10px; color: var(--muted); font-weight: 400; }
+
+.field { margin-bottom: 12px; }
+.field label { font-size: 0.7rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; display: block; margin-bottom: 4px; }
+.field .target-val { font-size: 1.05rem; font-weight: 700; color: var(--text); }
+.field input { width: 100%; background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 9px 12px; color: var(--text); font-size: 0.95rem; outline: none; transition: border-color 0.15s; }
+.field input:focus { border-color: var(--accent); }
+.field input::placeholder { color: var(--muted); }
+
+/* progress */
+.prog-label { display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--muted); margin-bottom: 5px; }
+.prog-pct { font-weight: 700; }
+.bar-bg { height: 8px; background: var(--card); border-radius: 4px; overflow: hidden; position: relative; margin-bottom: 8px; }
+.bar-fill { height: 100%; border-radius: 4px; transition: width 0.4s ease; }
+.bar-time { position: absolute; top: -2px; width: 2px; height: 12px; background: rgba(255,255,255,0.4); border-radius: 1px; }
+.fill-good { background: linear-gradient(90deg, #22c55e, #16a34a); }
+.fill-warn { background: linear-gradient(90deg, #f59e0b, #d97706); }
+.fill-danger { background: linear-gradient(90deg, #ef4444, #dc2626); }
+.fill-accent { background: linear-gradient(90deg, #6c63ff, #00d4aa); }
+
+.brand-stat-row { display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--muted); }
+.gap-plus { color: var(--success); font-weight: 600; }
+.gap-minus { color: var(--danger); font-weight: 600; }
+
+/* summary */
+.summary-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px; margin-bottom: 24px; }
+.stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px; }
+.stat-card .s-label { font-size: 0.7rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px; }
+.stat-card .s-val { font-size: 1.3rem; font-weight: 700; }
+.stat-card .s-sub { font-size: 0.72rem; color: var(--muted); margin-top: 3px; }
+
+/* scenario table */
+.sim-section { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 20px; margin-bottom: 24px; }
+.sim-section h2 { font-size: 0.9rem; font-weight: 700; margin-bottom: 16px; color: var(--text); }
+.sim-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+.sim-table th { text-align: left; padding: 8px 12px; color: var(--muted); font-weight: 600; font-size: 0.72rem; text-transform: uppercase; border-bottom: 1px solid var(--border); }
+.sim-table td { padding: 10px 12px; border-bottom: 1px solid var(--border); }
+.sim-table tr:last-child td { border-bottom: none; }
+.sim-table tr:hover td { background: var(--card); }
+.scenario-name { font-weight: 700; }
+.s-very-opt { color: #a78bfa; }
+.s-opt { color: var(--accent2); }
+.s-mid { color: var(--warn); }
+.s-cons { color: var(--muted); }
+.rate-badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 0.75rem; font-weight: 700; }
+.rate-over { background: rgba(34,197,94,0.15); color: var(--success); }
+.rate-warn { background: rgba(245,158,11,0.15); color: var(--warn); }
+.rate-danger { background: rgba(239,68,68,0.15); color: var(--danger); }
+.rate-ok { background: rgba(108,99,255,0.15); color: var(--accent); }
+
+/* per-brand sim */
+.brand-sim-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
+.brand-sim-card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 18px; }
+.brand-sim-card h3 { font-size: 0.9rem; font-weight: 700; margin-bottom: 14px; color: var(--text); }
+
+.col-text { color: var(--text); font-weight: 600; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>📊 브랜드 매출 시뮬레이터</h1>
+  <div id="clock">--:--:--</div>
+</header>
+
+<div class="config-bar">
+  <label>🕐 영업 시작 <input type="time" id="startTime" value="09:00"></label>
+  <label>🕔 마감 <input type="time" id="endTime" value="21:00"></label>
+  <span id="dayInfo">--</span>
+</div>
+
+<!-- 날짜 선택 -->
+<div class="date-row">
+  <label>📅 날짜 선택</label>
+  <select id="datePicker"></select>
+  <span class="today-badge" id="todayBadge" style="display:none">TODAY</span>
+</div>
+
+<!-- 목표 + 실적 입력 -->
+<div class="brands-row" id="brandsRow"></div>
+
+<!-- 전체 요약 -->
+<div class="summary-row">
+  <div class="stat-card">
+    <div class="s-label">전체 목표</div>
+    <div class="s-val" id="sumTarget">—</div>
+    <div class="s-sub">3개 브랜드 합산</div>
+  </div>
+  <div class="stat-card">
+    <div class="s-label">현재 실적</div>
+    <div class="s-val" id="sumActual">—</div>
+    <div class="s-sub" id="sumGap">—</div>
+  </div>
+  <div class="stat-card">
+    <div class="s-label">달성률</div>
+    <div class="s-val" id="sumRate">—</div>
+    <div class="s-sub" id="sumPace">—</div>
+  </div>
+  <div class="stat-card">
+    <div class="s-label">마감까지</div>
+    <div class="s-val" id="sumRemain">—</div>
+    <div class="s-sub" id="sumElapsed">—</div>
+  </div>
+</div>
+
+<!-- 전체 시나리오 -->
+<div class="sim-section">
+  <h2>📈 시나리오별 24시간 예상 마감 (전체 합산)</h2>
+  <table class="sim-table">
+    <thead>
+      <tr>
+        <th>시나리오</th>
+        <th>페이스 유지율</th>
+        <th>예상 마감 매출</th>
+        <th>달성률</th>
+        <th>목표 대비 차이</th>
+      </tr>
+    </thead>
+    <tbody id="simTableBody"></tbody>
+  </table>
+</div>
+
+<!-- 브랜드별 시나리오 -->
+<div class="brand-sim-grid" id="brandSimGrid"></div>
+
+<script>
+// ─── 날짜별 목표 데이터 ───
+const TARGET_DATA = {
+  BOH: {
+    "2026-05-29": 110065773,
+    "2026-05-30": 119125048,
+    "2026-05-31": 75190821,
+    "2026-06-01": 45091293,
+    "2026-06-02": 95109046,
+    "2026-06-03": 50119217,
+    "2026-06-04": 30115987,
+    "2026-06-05": 25146833,
+    "2026-06-06": 36143750,
+    "2026-06-07": 55163291,
+    "2026-06-08": 31149126,
+    "2026-06-09": 33143972,
+    "2026-06-10": 76198181,
+  },
+  WM: {
+    "2026-05-29": 80262581,
+    "2026-05-30": 45131290,
+    "2026-05-31": 35060862,
+    "2026-06-01": 15072697,
+    "2026-06-02": 12079478,
+    "2026-06-03": 17077324,
+    "2026-06-04": 16097888,
+    "2026-06-05": 11095834,
+    "2026-06-06": 11108861,
+    "2026-06-07": 10099417,
+    "2026-06-08": 7095982,
+    "2026-06-09": 7065645,
+    "2026-06-10": 14065645,
+  },
+  CG: {
+    "2026-05-29": 10000000,
+    "2026-05-30": 7000000,
+    "2026-05-31": 4000000,
+    "2026-06-01": 3000000,
+    "2026-06-02": 3000000,
+    "2026-06-03": 3000000,
+    "2026-06-04": 2500000,
+    "2026-06-05": 2500000,
+    "2026-06-06": 2500000,
+    "2026-06-07": 3000000,
+    "2026-06-08": 4000000,
+    "2026-06-09": 2000000,
+    "2026-06-10": 3500000,
+  }
+};
+
+const SCENARIOS = [
+  { name: "매우 낙관", cls: "s-very-opt", pace: 1.5 },
+  { name: "낙관",     cls: "s-opt",      pace: 1.0 },
+  { name: "중간",     cls: "s-mid",      pace: 0.6 },
+  { name: "보수",     cls: "s-cons",     pace: 0.3 },
+];
+
+const BRANDS = ["BOH", "WM", "CG"];
+const BRAND_COLORS = { BOH: "#a78bfa", WM: "#00d4aa", CG: "#f59e0b" };
+
+let actuals = { BOH: 0, WM: 0, CG: 0 };
+let selectedDate = todayStr();
+
+function todayStr() {
+  const d = new Date();
+  return d.getFullYear() + '-' +
+    String(d.getMonth()+1).padStart(2,'0') + '-' +
+    String(d.getDate()).padStart(2,'0');
+}
+
+function fmt(n, unit='') {
+  if (!n && n !== 0) return '—';
+  const abs = Math.abs(n);
+  let s;
+  if (abs >= 1e8) s = (n/1e8).toFixed(2) + '억';
+  else if (abs >= 1e4) s = (n/1e4).toFixed(0) + '만';
+  else s = n.toLocaleString();
+  return '¥' + s + unit;
+}
+
+function fmtNum(n) {
+  return n ? n.toLocaleString() : '0';
+}
+
+function parseNum(s) {
+  return parseInt(String(s).replace(/[,¥]/g,'')) || 0;
+}
+
+function getDayProgress() {
+  const now = new Date();
+  const [sh, sm] = document.getElementById('startTime').value.split(':').map(Number);
+  const [eh, em] = document.getElementById('endTime').value.split(':').map(Number);
+  const startSec = sh*3600 + sm*60;
+  const endSec = eh*3600 + em*60;
+  const nowSec = now.getHours()*3600 + now.getMinutes()*60 + now.getSeconds();
+  const total = endSec - startSec;
+  const elapsed = Math.min(Math.max(nowSec - startSec, 0), total);
+  const pct = total > 0 ? elapsed / total : 0;
+  const remaining = Math.max(endSec - nowSec, 0);
+  return { pct, elapsed, remaining, total, nowSec, startSec, endSec };
+}
+
+function getBarClass(pct) {
+  if (pct >= 100) return 'fill-good';
+  if (pct >= 70)  return 'fill-accent';
+  if (pct >= 40)  return 'fill-warn';
+  return 'fill-danger';
+}
+
+function getRateBadge(pct) {
+  const p = pct.toFixed(0) + '%';
+  if (pct >= 100) return `<span class="rate-badge rate-over">${p} ✓</span>`;
+  if (pct >= 70)  return `<span class="rate-badge rate-ok">${p}</span>`;
+  if (pct >= 40)  return `<span class="rate-badge rate-warn">${p}</span>`;
+  return `<span class="rate-badge rate-danger">${p}</span>`;
+}
+
+// ─── 날짜 선택 드롭다운 초기화 ───
+function initDatePicker() {
+  const dates = Object.keys(TARGET_DATA.BOH).sort();
+  const sel = document.getElementById('datePicker');
+  sel.innerHTML = dates.map(d =>
+    `<option value="${d}"${d === selectedDate ? ' selected' : ''}>${d}</option>`
+  ).join('');
+  sel.addEventListener('change', () => {
+    selectedDate = sel.value;
+    save();
+    renderAll();
+  });
+}
+
+function updateTodayBadge() {
+  const badge = document.getElementById('todayBadge');
+  badge.style.display = selectedDate === todayStr() ? 'inline-block' : 'none';
+}
+
+// ─── 브랜드 입력 카드 ───
+function renderBrands() {
+  const dp = getDayProgress();
+  const row = document.getElementById('brandsRow');
+  row.innerHTML = BRANDS.map(brand => {
+    const target = TARGET_DATA[brand][selectedDate] || 0;
+    const actual = actuals[brand] || 0;
+    const pct = target > 0 ? actual / target * 100 : 0;
+    const barW = Math.min(pct, 100).toFixed(1);
+    const barCls = getBarClass(pct);
+    const timePct = (dp.pct * 100).toFixed(1);
+    const gap = actual - target;
+    const gapHtml = gap >= 0
+      ? `<span class="gap-plus">+${fmt(gap)}</span>`
+      : `<span class="gap-minus">${fmt(gap)}</span>`;
+
+    return `
+    <div class="brand-card">
+      <h3 style="color:${BRAND_COLORS[brand]}">${brand} <span class="tag">${selectedDate}</span></h3>
+      <div class="field">
+        <label>일별 목표 매출</label>
+        <div class="target-val">${fmtNum(target)} 엔</div>
+      </div>
+      <div class="field">
+        <label>현재 실적 입력</label>
+        <input type="text" id="inp_${brand}" placeholder="0" value="${actual > 0 ? fmtNum(actual) : ''}"
+          oninput="onActualInput('${brand}', this.value)" />
+      </div>
+      <div class="prog-label">
+        <span>진도율</span>
+        <span class="prog-pct">${pct.toFixed(1)}%</span>
+      </div>
+      <div class="bar-bg">
+        <div class="bar-fill ${barCls}" style="width:${barW}%"></div>
+        <div class="bar-time" style="left:${timePct}%" title="현재 시각"></div>
+      </div>
+      <div class="brand-stat-row">
+        <span>목표: ${fmt(target)}</span>
+        <span>실적: ${fmt(actual)}</span>
+        <span>차이: ${gapHtml}</span>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function onActualInput(brand, val) {
+  actuals[brand] = parseNum(val);
+  save();
+  updateSummary();
+  renderSimTable();
+  renderBrandSims();
+}
+
+// ─── 시나리오 계산 ───
+function calcProjected(actual, dp, paceFactor) {
+  if (dp.pct <= 0 || actual <= 0) return actual;
+  const hourlyRate = actual / (dp.elapsed / 3600);
+  const remainHours = dp.remaining / 3600;
+  return actual + remainHours * hourlyRate * paceFactor;
+}
+
+// ─── 전체 요약 ───
+function updateSummary() {
+  const dp = getDayProgress();
+  const totalTarget = BRANDS.reduce((s, b) => s + (TARGET_DATA[b][selectedDate] || 0), 0);
+  const totalActual = BRANDS.reduce((s, b) => s + (actuals[b] || 0), 0);
+  const rate = totalTarget > 0 ? totalActual / totalTarget * 100 : 0;
+
+  document.getElementById('sumTarget').textContent = fmt(totalTarget);
+  document.getElementById('sumActual').textContent = fmt(totalActual);
+
+  const gap = totalActual - totalTarget;
+  const gapEl = document.getElementById('sumGap');
+  gapEl.textContent = (gap >= 0 ? '+' : '') + fmt(gap);
+  gapEl.style.color = gap >= 0 ? 'var(--success)' : 'var(--danger)';
+
+  const rateEl = document.getElementById('sumRate');
+  rateEl.textContent = rate.toFixed(1) + '%';
+  rateEl.style.color = rate >= 100 ? 'var(--success)' : rate >= 70 ? '' : rate >= 40 ? 'var(--warn)' : 'var(--danger)';
+
+  const pace = dp.pct > 0 ? (rate / (dp.pct * 100) * 100) : 0;
+  document.getElementById('sumPace').textContent = dp.pct > 0 ? `속도지수 ${pace.toFixed(0)}%` : '영업 시간 전';
+
+  const rem = dp.remaining;
+  const rh = Math.floor(rem / 3600);
+  const rm = Math.floor((rem % 3600) / 60);
+  document.getElementById('sumRemain').textContent = rem > 0 ? `${rh}h ${rm}m` : '마감';
+  const el = dp.elapsed;
+  const eh = Math.floor(el / 3600);
+  const em2 = Math.floor((el % 3600) / 60);
+  document.getElementById('sumElapsed').textContent = `경과 ${eh}h ${em2}m (${(dp.pct*100).toFixed(0)}%)`;
+
+  // dayInfo
+  document.getElementById('dayInfo').textContent =
+    dp.remaining > 0 ? `⏱ 마감까지 ${rh}시간 ${rm}분` : '🔔 영업 마감';
+}
+
+// ─── 전체 시나리오 테이블 ───
+function renderSimTable() {
+  const dp = getDayProgress();
+  const totalTarget = BRANDS.reduce((s, b) => s + (TARGET_DATA[b][selectedDate] || 0), 0);
+  const totalActual = BRANDS.reduce((s, b) => s + (actuals[b] || 0), 0);
+  const tbody = document.getElementById('simTableBody');
+
+  tbody.innerHTML = SCENARIOS.map(sc => {
+    const proj = calcProjected(totalActual, dp, sc.pace);
+    const rate = totalTarget > 0 ? proj / totalTarget * 100 : 0;
+    const gap = proj - totalTarget;
+    const gapStr = (gap >= 0 ? '+' : '') + fmt(gap);
+    const paceLabel = sc.pace >= 1 ? `현재 페이스 × ${sc.pace}` : `현재 페이스 × ${sc.pace}`;
+
+    return `<tr>
+      <td><span class="scenario-name ${sc.cls}">${sc.name}</span></td>
+      <td><span style="color:var(--muted)">${(sc.pace*100).toFixed(0)}%</span></td>
+      <td class="col-text">${fmt(Math.round(proj))}</td>
+      <td>${getRateBadge(rate)}</td>
+      <td style="color:${gap >= 0 ? 'var(--success)' : 'var(--danger)'}">${gapStr}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ─── 브랜드별 시나리오 ───
+function renderBrandSims() {
+  const dp = getDayProgress();
+  const grid = document.getElementById('brandSimGrid');
+
+  grid.innerHTML = BRANDS.map(brand => {
+    const target = TARGET_DATA[brand][selectedDate] || 0;
+    const actual = actuals[brand] || 0;
+
+    const rows = SCENARIOS.map(sc => {
+      const proj = calcProjected(actual, dp, sc.pace);
+      const rate = target > 0 ? proj / target * 100 : 0;
+      return `<tr>
+        <td><span class="scenario-name ${sc.cls}">${sc.name}</span></td>
+        <td style="color:var(--muted);font-size:0.75rem">${(sc.pace*100).toFixed(0)}%</td>
+        <td class="col-text">${fmt(Math.round(proj))}</td>
+        <td>${getRateBadge(rate)}</td>
+      </tr>`;
+    }).join('');
+
+    return `
+    <div class="brand-sim-card">
+      <h3 style="color:${BRAND_COLORS[brand]}">${brand} <span style="font-size:0.72rem;color:var(--muted);font-weight:400">목표: ${fmt(target)}</span></h3>
+      <table class="sim-table">
+        <thead><tr>
+          <th>시나리오</th><th>페이스</th><th>예상 마감</th><th>달성률</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+  }).join('');
+}
+
+// ─── 저장/불러오기 ───
+function save() {
+  localStorage.setItem('smDash', JSON.stringify({ actuals, selectedDate,
+    startTime: document.getElementById('startTime').value,
+    endTime: document.getElementById('endTime').value }));
+}
+
+function load() {
+  try {
+    const d = JSON.parse(localStorage.getItem('smDash') || '{}');
+    if (d.actuals) actuals = d.actuals;
+    if (d.selectedDate) selectedDate = d.selectedDate;
+    if (d.startTime) document.getElementById('startTime').value = d.startTime;
+    if (d.endTime) document.getElementById('endTime').value = d.endTime;
+  } catch(e) {}
+}
+
+function renderAll() {
+  updateTodayBadge();
+  renderBrands();
+  updateSummary();
+  renderSimTable();
+  renderBrandSims();
+}
+
+// ─── 시계 ───
+function updateClock() {
+  const now = new Date();
+  document.getElementById('clock').textContent =
+    now.toLocaleTimeString('ko-KR', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
+}
+
+// ─── 초기화 ───
+load();
+initDatePicker();
+renderAll();
+updateClock();
+
+setInterval(() => {
+  updateClock();
+  if (selectedDate === todayStr()) {
+    updateSummary();
+    renderSimTable();
+    renderBrandSims();
+    // 시간 마커 업데이트
+    const dp = getDayProgress();
+    document.querySelectorAll('.bar-time').forEach(el => {
+      el.style.left = (dp.pct * 100).toFixed(1) + '%';
+    });
+  }
+}, 5000);
+
+document.getElementById('startTime').addEventListener('change', () => { save(); renderAll(); });
+document.getElementById('endTime').addEventListener('change', () => { save(); renderAll(); });
+</script>
+</body>
+</html>
