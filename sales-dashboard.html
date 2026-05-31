@@ -598,25 +598,80 @@ function renderPaceBox(brand) {
            d.toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'});
   };
 
+  // ── 필요 페이스 계산 ──
+  const dp = getDayProgress();
+  const target = TARGET_DATA[brand][selectedDate] || 0;
+  const actual = getActuals()[brand] || 0;
+  const needed = target - actual;
+  const needPerHour = dp.remaining > 0 ? needed / (dp.remaining / 3600) : 0;
+  const needPerMin  = needPerHour / 60;
+
   // 최신 구간 페이스 표시
   let paceHtml = '';
   if (info) {
     const arrow = info.trend==='up'?'↑':info.trend==='down'?'↓':'→';
-    const color = info.trend==='up'?'var(--success)':info.trend==='down'?'var(--danger)':'var(--muted)';
+    const curColor = info.trend==='up'?'var(--success)':info.trend==='down'?'var(--danger)':'var(--muted)';
     const minStr = info.diffMin < 60 ? info.diffMin.toFixed(0)+'분' : (info.diffMin/60).toFixed(1)+'시간';
+
+    // 페이스 비교
+    const diff = info.perHour - needPerHour;
+    const diffPct = needPerHour > 0 ? (diff / needPerHour * 100) : 0;
+    const isOk = diff >= 0;
+    const statusColor = isOk ? 'var(--success)' : 'var(--danger)';
+    const statusIcon  = isOk ? '✅' : '⚠️';
+    const statusLabel = isOk
+      ? `목표 페이스 초과 +${fmt(Math.round(diff))}/h (${diffPct>=0?'+':''}${diffPct.toFixed(0)}%)`
+      : `목표 페이스 부족 ${fmt(Math.round(diff))}/h (${diffPct.toFixed(0)}%)`;
+
+    // 게이지 바: 현재/필요 페이스 비율
+    const maxPace = Math.max(info.perHour, needPerHour, 1);
+    const curW  = Math.min(info.perHour  / maxPace * 100, 100).toFixed(1);
+    const needW = Math.min(needPerHour   / maxPace * 100, 100).toFixed(1);
+
     paceHtml = `
-    <div style="display:flex;align-items:center;gap:20px;flex-wrap:wrap;padding:14px;background:var(--card);border-radius:10px;margin-bottom:14px">
+    <!-- 페이스 비교 배너 -->
+    <div style="background:${isOk?'rgba(34,197,94,0.08)':'rgba(239,68,68,0.08)'};border:1px solid ${statusColor};border-radius:10px;padding:14px 18px;margin-bottom:14px;display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+      <div style="font-size:1.3rem">${statusIcon}</div>
+      <div style="flex:1;min-width:180px">
+        <div style="font-size:0.7rem;color:var(--muted);margin-bottom:2px">페이스 판정</div>
+        <div style="font-size:0.95rem;font-weight:700;color:${statusColor}">${statusLabel}</div>
+      </div>
+      <div style="text-align:right;min-width:120px">
+        <div style="font-size:0.65rem;color:var(--muted)">필요 페이스</div>
+        <div style="font-size:1rem;font-weight:700;color:var(--warn)">${fmt(Math.round(needPerHour))}/h</div>
+        <div style="font-size:0.72rem;color:var(--muted)">${fmt(Math.round(needPerMin))}/m</div>
+      </div>
+    </div>
+
+    <!-- 페이스 게이지 -->
+    <div style="background:var(--card);border-radius:10px;padding:14px 16px;margin-bottom:14px">
+      <div style="display:flex;justify-content:space-between;font-size:0.68rem;color:var(--muted);margin-bottom:6px">
+        <span>현재 구간 페이스</span><span style="color:${curColor};font-weight:700">${fmt(Math.round(info.perHour))}/h</span>
+      </div>
+      <div style="height:8px;background:var(--border);border-radius:4px;overflow:hidden;margin-bottom:8px">
+        <div style="height:100%;width:${curW}%;background:${curColor};border-radius:4px;transition:width 0.4s"></div>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:0.68rem;color:var(--muted);margin-bottom:6px">
+        <span>목표 달성 필요 페이스</span><span style="color:var(--warn);font-weight:700">${fmt(Math.round(needPerHour))}/h</span>
+      </div>
+      <div style="height:8px;background:var(--border);border-radius:4px;overflow:hidden">
+        <div style="height:100%;width:${needW}%;background:var(--warn);border-radius:4px;transition:width 0.4s"></div>
+      </div>
+    </div>
+
+    <!-- 구간 상세 -->
+    <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;padding:12px 16px;background:var(--card);border-radius:10px;margin-bottom:14px">
       <div>
-        <div style="font-size:0.65rem;color:var(--muted);margin-bottom:3px">최근 구간 증감 (${minStr})</div>
-        <div style="font-size:1.6rem;font-weight:800;color:${color}">${arrow} ${info.diffVal>=0?'+':''}${fmt(info.diffVal)}</div>
+        <div style="font-size:0.65rem;color:var(--muted);margin-bottom:3px">구간 증감 (${minStr})</div>
+        <div style="font-size:1.4rem;font-weight:800;color:${curColor}">${arrow} ${info.diffVal>=0?'+':''}${fmt(info.diffVal)}</div>
       </div>
       <div>
-        <div style="font-size:0.65rem;color:var(--muted);margin-bottom:3px">시간당 페이스</div>
-        <div style="font-size:1.1rem;font-weight:700;color:${color}">${fmt(Math.round(info.perHour))}/h</div>
+        <div style="font-size:0.65rem;color:var(--muted);margin-bottom:3px">구간 페이스</div>
+        <div style="font-size:1rem;font-weight:700;color:${curColor}">${fmt(Math.round(info.perHour))}/h</div>
       </div>
       <div>
-        <div style="font-size:0.65rem;color:var(--muted);margin-bottom:3px">분당 페이스</div>
-        <div style="font-size:0.9rem;font-weight:600">${fmt(Math.round(info.perHour/60))}/m</div>
+        <div style="font-size:0.65rem;color:var(--muted);margin-bottom:3px">분당</div>
+        <div style="font-size:0.88rem;font-weight:600">${fmt(Math.round(info.perHour/60))}/m</div>
       </div>
       <div style="margin-left:auto;font-size:0.72rem;color:var(--muted);text-align:right">
         <div>${tFmt(info.prevTime.getTime())} → ${tFmt(info.currTime.getTime())}</div>
@@ -624,7 +679,23 @@ function renderPaceBox(brand) {
       </div>
     </div>`;
   } else {
-    paceHtml = `<div style="color:var(--muted);font-size:0.8rem;padding:10px 0">실적을 2회 이상 입력(엔터)하면 구간 페이스가 표시됩니다</div>`;
+    // 실적은 있지만 기록이 1개뿐인 경우 필요 페이스만 표시
+    const needHtml = needPerHour > 0 ? `
+    <div style="background:var(--card);border-radius:10px;padding:14px 16px;margin-bottom:14px;display:flex;gap:20px;flex-wrap:wrap">
+      <div>
+        <div style="font-size:0.65rem;color:var(--muted);margin-bottom:3px">목표 달성 필요 페이스</div>
+        <div style="font-size:1.2rem;font-weight:700;color:var(--warn)">${fmt(Math.round(needPerHour))}/h</div>
+      </div>
+      <div>
+        <div style="font-size:0.65rem;color:var(--muted);margin-bottom:3px">분당 필요</div>
+        <div style="font-size:1rem;font-weight:600">${fmt(Math.round(needPerMin))}/m</div>
+      </div>
+      <div>
+        <div style="font-size:0.65rem;color:var(--muted);margin-bottom:3px">잔여 목표</div>
+        <div style="font-size:1rem;font-weight:600;color:var(--danger)">${fmt(needed)}</div>
+      </div>
+    </div>` : '';
+    paceHtml = needHtml + `<div style="color:var(--muted);font-size:0.8rem;padding:4px 0">실적을 2회 이상 입력(엔터)하면 구간 페이스 비교가 표시됩니다</div>`;
   }
 
   // 전체 입력 히스토리 테이블
@@ -636,6 +707,14 @@ function renderPaceBox(brand) {
       const dm = prev ? (entry.ts - prev.ts)/60000 : null;
       const ph = (dv !== null && dm > 0) ? dv/(dm/60) : null;
       const dvColor = dv > 0 ? 'var(--success)' : dv < 0 ? 'var(--danger)' : 'var(--muted)';
+      // 해당 시점의 필요 페이스
+      const remAtEntry = Math.max(86400 - entry.ts % 86400000 / 1000, 0); // 대략
+      const neededAtEntry = target - entry.val;
+      const needPhEntry = remAtEntry > 0 ? neededAtEntry / (remAtEntry/3600) : 0;
+      const paceStatus = ph !== null
+        ? (ph >= needPhEntry ? `<span style="color:var(--success);font-size:0.72rem">▲ 여유</span>`
+                             : `<span style="color:var(--danger);font-size:0.72rem">▼ 부족</span>`)
+        : '—';
       return `<tr>
         <td style="color:var(--muted);font-size:0.78rem">${log.length - i}</td>
         <td style="font-weight:600;color:var(--accent2)">${dtFmt(entry.ts)}</td>
@@ -643,6 +722,7 @@ function renderPaceBox(brand) {
         <td style="color:${dvColor};font-weight:600">${dv!==null?(dv>=0?'+':'')+fmt(dv):'—'}</td>
         <td style="color:var(--muted);font-size:0.75rem">${dm!==null?dm.toFixed(0)+'분':'—'}</td>
         <td style="color:${dvColor}">${ph!==null?fmt(Math.round(ph))+'/h':'—'}</td>
+        <td>${paceStatus}</td>
       </tr>`;
     }).join('');
 
@@ -659,6 +739,7 @@ function renderPaceBox(brand) {
         <th style="text-align:left;padding:6px 8px;color:var(--muted);font-size:0.68rem">구간 증감</th>
         <th style="text-align:left;padding:6px 8px;color:var(--muted);font-size:0.68rem">경과</th>
         <th style="text-align:left;padding:6px 8px;color:var(--muted);font-size:0.68rem">구간 페이스</th>
+        <th style="text-align:left;padding:6px 8px;color:var(--muted);font-size:0.68rem">판정</th>
       </tr></thead>
       <tbody>${rows}</tbody>
     </table>`;
