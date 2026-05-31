@@ -224,11 +224,21 @@ const SCENARIOS = [
 const BRANDS = ["BOH","WM","CG"];
 const BRAND_COLOR = { BOH:"var(--boh)", WM:"var(--wm)", CG:"var(--cg)" };
 
-let actuals = { BOH:0, WM:0, CG:0 };
-// 페이스 로그: { BOH: [{ts, val}, ...], ... }
-let paceLogs = { BOH:[], WM:[], CG:[] };
+// 날짜별 저장: { "2026-05-31": { BOH:0, WM:0, CG:0 }, ... }
+let actualsByDate = {};
+let paceLogsByDate = {};
 let selectedDate = todayStr();
 let currentTab = "all";
+
+// 현재 날짜의 actuals/paceLogs에 접근하는 헬퍼
+function getActuals() {
+  if (!actualsByDate[selectedDate]) actualsByDate[selectedDate] = { BOH:0, WM:0, CG:0 };
+  return actualsByDate[selectedDate];
+}
+function getPaceLogs() {
+  if (!paceLogsByDate[selectedDate]) paceLogsByDate[selectedDate] = { BOH:[], WM:[], CG:[] };
+  return paceLogsByDate[selectedDate];
+}
 
 // ───────── 유틸 ─────────
 function todayStr() {
@@ -306,7 +316,7 @@ function initDatePicker() {
 function renderBrandPanel(brand) {
   const dp = getDayProgress();
   const target = TARGET_DATA[brand][selectedDate] || 0;
-  const actual = actuals[brand] || 0;
+  const actual = getActuals()[brand] || 0;
   const pct = target > 0 ? actual/target*100 : 0;
   const barW = Math.min(pct,100).toFixed(1);
   const barCls = getBarClass(pct);
@@ -453,7 +463,7 @@ function renderBrandPanel(brand) {
 function renderAllTab() {
   const dp = getDayProgress();
   const totalTarget = BRANDS.reduce((s,b)=>s+(TARGET_DATA[b][selectedDate]||0),0);
-  const totalActual = BRANDS.reduce((s,b)=>s+(actuals[b]||0),0);
+  const totalActual = BRANDS.reduce((s,b)=>s+(getActuals()[b]||0),0);
   const rate = totalTarget > 0 ? totalActual/totalTarget*100 : 0;
   const gap = totalActual - totalTarget;
   const remH = Math.floor(dp.remaining/3600);
@@ -486,7 +496,7 @@ function renderAllTab() {
   // 브랜드 행
   document.getElementById('all-brands').innerHTML = BRANDS.map(brand => {
     const target = TARGET_DATA[brand][selectedDate]||0;
-    const actual = actuals[brand]||0;
+    const actual = getActuals()[brand]||0;
     const pct = target>0 ? actual/target*100 : 0;
     const barW = Math.min(pct,100).toFixed(1);
     const barCls = getBarClass(pct);
@@ -532,14 +542,17 @@ function renderAllTab() {
 
 // ───────── 저장/불러오기 ─────────
 function save() {
-  localStorage.setItem('smDash2', JSON.stringify({ actuals, selectedDate, paceLogs }));
+  localStorage.setItem('smDash2', JSON.stringify({ actualsByDate, selectedDate, paceLogsByDate }));
 }
 function load() {
   try {
     const d = JSON.parse(localStorage.getItem('smDash2')||'{}');
-    if (d.actuals) actuals = d.actuals;
+    if (d.actualsByDate) actualsByDate = d.actualsByDate;
     if (d.selectedDate) selectedDate = d.selectedDate;
-    if (d.paceLogs) paceLogs = d.paceLogs;
+    if (d.paceLogsByDate) paceLogsByDate = d.paceLogsByDate;
+    // 구버전 호환
+    if (d.actuals && !d.actualsByDate) actualsByDate[selectedDate] = d.actuals;
+    if (d.paceLogs && !d.paceLogsByDate) paceLogsByDate[selectedDate] = d.paceLogs;
   } catch(e) {}
 }
 
@@ -547,7 +560,7 @@ function load() {
 function recordPace(brand, val) {
   const v = parseNum(val);
   if (v <= 0) return;
-  const log = paceLogs[brand];
+  const log = getPaceLogs()[brand];
   const now = Date.now();
   // 마지막 기록과 값이 같으면 스킵
   if (log.length && log[log.length-1].val === v) return;
@@ -557,7 +570,7 @@ function recordPace(brand, val) {
 }
 
 function getPaceInfo(brand) {
-  const log = paceLogs[brand];
+  const log = getPaceLogs()[brand];
   if (log.length < 2) return null;
   const prev = log[log.length-2];
   const curr = log[log.length-1];
@@ -572,7 +585,7 @@ function getPaceInfo(brand) {
 
 function renderPaceBox(brand) {
   const info = getPaceInfo(brand);
-  const log = paceLogs[brand];
+  const log = getPaceLogs()[brand];
   const panel = document.getElementById('panel-'+brand);
   if (!panel) return;
   const box = panel.querySelector('.pace-box');
@@ -655,17 +668,16 @@ function renderPaceBox(brand) {
 }
 
 function clearLog(brand) {
-  if (!confirm(`${brand} 입력 기록을 초기화할까요?`)) return;
-  paceLogs[brand] = [];
+  if (!confirm(`${brand} ${selectedDate} 입력 기록을 초기화할까요?`)) return;
+  getPaceLogs()[brand] = [];
   save();
   renderPaceBox(brand);
 }
 
 // ───────── 입력 핸들러 ─────────
 function onInput(brand, val) {
-  actuals[brand] = parseNum(val);
+  getActuals()[brand] = parseNum(val);
   save();
-  // 입력창은 건드리지 않고 결과값만 업데이트
   updateBrandResults(brand);
   renderAllTab();
 }
@@ -681,7 +693,7 @@ function onCommit(brand, val) {
 function updateBrandResults(brand) {
   const dp = getDayProgress();
   const target = TARGET_DATA[brand][selectedDate] || 0;
-  const actual = actuals[brand] || 0;
+  const actual = getActuals()[brand] || 0;
   const pct = target > 0 ? actual/target*100 : 0;
   const barW = Math.min(pct,100).toFixed(1);
   const barCls = getBarClass(pct);
