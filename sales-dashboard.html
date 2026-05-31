@@ -225,6 +225,8 @@ const BRANDS = ["BOH","WM","CG"];
 const BRAND_COLOR = { BOH:"var(--boh)", WM:"var(--wm)", CG:"var(--cg)" };
 
 let actuals = { BOH:0, WM:0, CG:0 };
+// 페이스 로그: { BOH: [{ts, val}, ...], ... }
+let paceLogs = { BOH:[], WM:[], CG:[] };
 let selectedDate = todayStr();
 let currentTab = "all";
 
@@ -383,6 +385,8 @@ function renderBrandPanel(brand) {
           <input class="actual-input" id="inp_${brand}" type="text"
             placeholder="0" value="${actual>0?fmtNum(actual):''}"
             oninput="onInput('${brand}',this.value)"
+            onblur="onCommit('${brand}',this.value)"
+            onkeydown="if(event.key==='Enter'){onCommit('${brand}',this.value);this.blur()}"
             style="border-color:${BRAND_COLOR[brand]}" />
         </div>
       </div>
@@ -403,6 +407,12 @@ function renderBrandPanel(brand) {
         <span style="color:var(--muted)">▲ 현재 시각 ${(dp.pct*100).toFixed(0)}%</span>
         <span>100%</span>
       </div>
+    </div>
+
+    <!-- 페이스 박스 -->
+    <div class="sim-section" style="margin-bottom:14px">
+      <h2>⚡ 구간 페이스 (입력 기록 기반)</h2>
+      <div class="pace-box"></div>
     </div>
 
     <!-- 시나리오 -->
@@ -522,14 +532,98 @@ function renderAllTab() {
 
 // ───────── 저장/불러오기 ─────────
 function save() {
-  localStorage.setItem('smDash2', JSON.stringify({ actuals, selectedDate }));
+  localStorage.setItem('smDash2', JSON.stringify({ actuals, selectedDate, paceLogs }));
 }
 function load() {
   try {
     const d = JSON.parse(localStorage.getItem('smDash2')||'{}');
     if (d.actuals) actuals = d.actuals;
     if (d.selectedDate) selectedDate = d.selectedDate;
+    if (d.paceLogs) paceLogs = d.paceLogs;
   } catch(e) {}
+}
+
+// ───────── 페이스 로그 계산 ─────────
+function recordPace(brand, val) {
+  const v = parseNum(val);
+  if (v <= 0) return;
+  const log = paceLogs[brand];
+  const now = Date.now();
+  // 마지막 기록과 값이 같으면 스킵
+  if (log.length && log[log.length-1].val === v) return;
+  log.push({ ts: now, val: v });
+  // 최대 20개 유지
+  if (log.length > 20) log.shift();
+}
+
+function getPaceInfo(brand) {
+  const log = paceLogs[brand];
+  if (log.length < 2) return null;
+  const prev = log[log.length-2];
+  const curr = log[log.length-1];
+  const diffVal = curr.val - prev.val;
+  const diffMin = (curr.ts - prev.ts) / 60000;
+  if (diffMin < 0.1) return null; // 너무 짧은 간격 무시
+  const perHour = diffVal / (diffMin / 60);
+  const trend = diffVal > 0 ? 'up' : diffVal < 0 ? 'down' : 'flat';
+  return { diffVal, diffMin, perHour, trend, prevVal: prev.val, currVal: curr.val,
+    prevTime: new Date(prev.ts), currTime: new Date(curr.ts) };
+}
+
+function renderPaceBox(brand) {
+  const info = getPaceInfo(brand);
+  const log = paceLogs[brand];
+  const panel = document.getElementById('panel-'+brand);
+  if (!panel) return;
+  let box = panel.querySelector('.pace-box');
+  if (!box) return;
+
+  if (!info) {
+    box.innerHTML = `<span style="color:var(--muted);font-size:0.8rem">실적을 2회 이상 입력하면 구간 페이스가 표시됩니다</span>`;
+    return;
+  }
+  const arrow = info.trend === 'up' ? '↑' : info.trend === 'down' ? '↓' : '→';
+  const color = info.trend === 'up' ? 'var(--success)' : info.trend === 'down' ? 'var(--danger)' : 'var(--muted)';
+  const minStr = info.diffMin < 60 ? info.diffMin.toFixed(0)+'분' : (info.diffMin/60).toFixed(1)+'시간';
+  const tFmt = t => t.toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'});
+
+  // 로그 히스토리 (최근 5개)
+  const history = log.slice(-5).reverse().map((entry, i, arr) => {
+    if (i === arr.length-1) return '';
+    const next = arr[i];
+    const pr = arr[i+1];
+    const dv = next.val - pr.val;
+    const dm = (next.ts - pr.ts)/60000;
+    const ph = dm > 0 ? dv/(dm/60) : 0;
+    const c = dv > 0 ? 'var(--success)' : dv < 0 ? 'var(--danger)' : 'var(--muted)';
+    return `<div style="display:flex;justify-content:space-between;font-size:0.72rem;padding:3px 0;border-bottom:1px solid var(--border)">
+      <span style="color:var(--muted)">${tFmt(new Date(pr.ts))} → ${tFmt(new Date(next.ts))}</span>
+      <span style="color:${c};font-weight:600">${dv>=0?'+':''}${fmt(dv)}</span>
+      <span style="color:var(--muted)">${fmt(Math.round(ph))}/h</span>
+    </div>`;
+  }).join('');
+
+  box.innerHTML = `
+    <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:10px">
+      <div>
+        <div style="font-size:0.68rem;color:var(--muted);margin-bottom:2px">구간 증감 (${minStr})</div>
+        <div style="font-size:1.5rem;font-weight:800;color:${color}">${arrow} ${info.diffVal>=0?'+':''}${fmt(info.diffVal)}</div>
+      </div>
+      <div>
+        <div style="font-size:0.68rem;color:var(--muted);margin-bottom:2px">시간당 페이스</div>
+        <div style="font-size:1.1rem;font-weight:700;color:${color}">${fmt(Math.round(info.perHour))}/h</div>
+      </div>
+      <div>
+        <div style="font-size:0.68rem;color:var(--muted);margin-bottom:2px">분당 페이스</div>
+        <div style="font-size:0.9rem;font-weight:600;color:var(--text)">${fmt(Math.round(info.perHour/60))}/m</div>
+      </div>
+      <div style="margin-left:auto;text-align:right">
+        <div style="font-size:0.68rem;color:var(--muted)">${tFmt(info.prevTime)} → ${tFmt(info.currTime)}</div>
+        <div style="font-size:0.75rem;color:var(--muted)">${fmt(info.prevVal)} → ${fmt(info.currVal)}</div>
+      </div>
+    </div>
+    ${history ? `<div style="font-size:0.7rem;color:var(--muted);margin-bottom:4px">입력 히스토리</div>${history}` : ''}
+  `;
 }
 
 // ───────── 입력 핸들러 ─────────
@@ -539,6 +633,13 @@ function onInput(brand, val) {
   // 입력창은 건드리지 않고 결과값만 업데이트
   updateBrandResults(brand);
   renderAllTab();
+}
+
+// 엔터 또는 포커스 아웃 시 페이스 기록
+function onCommit(brand, val) {
+  recordPace(brand, val);
+  save();
+  renderPaceBox(brand);
 }
 
 // 브랜드 패널에서 입력창 제외하고 결과만 업데이트
@@ -633,7 +734,7 @@ function updateBrandResults(brand) {
 function renderAll() {
   document.getElementById('todayBadge').style.display = selectedDate===todayStr()?'inline-block':'none';
   renderAllTab();
-  BRANDS.forEach(renderBrandPanel);
+  BRANDS.forEach(b => { renderBrandPanel(b); renderPaceBox(b); });
 }
 
 function updateClock() {
