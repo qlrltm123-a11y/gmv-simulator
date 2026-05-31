@@ -575,55 +575,90 @@ function renderPaceBox(brand) {
   const log = paceLogs[brand];
   const panel = document.getElementById('panel-'+brand);
   if (!panel) return;
-  let box = panel.querySelector('.pace-box');
+  const box = panel.querySelector('.pace-box');
   if (!box) return;
 
-  if (!info) {
-    box.innerHTML = `<span style="color:var(--muted);font-size:0.8rem">실적을 2회 이상 입력하면 구간 페이스가 표시됩니다</span>`;
-    return;
-  }
-  const arrow = info.trend === 'up' ? '↑' : info.trend === 'down' ? '↓' : '→';
-  const color = info.trend === 'up' ? 'var(--success)' : info.trend === 'down' ? 'var(--danger)' : 'var(--muted)';
-  const minStr = info.diffMin < 60 ? info.diffMin.toFixed(0)+'분' : (info.diffMin/60).toFixed(1)+'시간';
-  const tFmt = t => t.toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'});
+  const tFmt = t => new Date(t).toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'});
+  const dtFmt = t => {
+    const d = new Date(t);
+    return d.toLocaleDateString('ko-KR',{month:'2-digit',day:'2-digit'}) + ' ' +
+           d.toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'});
+  };
 
-  // 로그 히스토리 (최근 5개)
-  const history = log.slice(-5).reverse().map((entry, i, arr) => {
-    if (i === arr.length-1) return '';
-    const next = arr[i];
-    const pr = arr[i+1];
-    const dv = next.val - pr.val;
-    const dm = (next.ts - pr.ts)/60000;
-    const ph = dm > 0 ? dv/(dm/60) : 0;
-    const c = dv > 0 ? 'var(--success)' : dv < 0 ? 'var(--danger)' : 'var(--muted)';
-    return `<div style="display:flex;justify-content:space-between;font-size:0.72rem;padding:3px 0;border-bottom:1px solid var(--border)">
-      <span style="color:var(--muted)">${tFmt(new Date(pr.ts))} → ${tFmt(new Date(next.ts))}</span>
-      <span style="color:${c};font-weight:600">${dv>=0?'+':''}${fmt(dv)}</span>
-      <span style="color:var(--muted)">${fmt(Math.round(ph))}/h</span>
-    </div>`;
-  }).join('');
-
-  box.innerHTML = `
-    <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:10px">
+  // 최신 구간 페이스 표시
+  let paceHtml = '';
+  if (info) {
+    const arrow = info.trend==='up'?'↑':info.trend==='down'?'↓':'→';
+    const color = info.trend==='up'?'var(--success)':info.trend==='down'?'var(--danger)':'var(--muted)';
+    const minStr = info.diffMin < 60 ? info.diffMin.toFixed(0)+'분' : (info.diffMin/60).toFixed(1)+'시간';
+    paceHtml = `
+    <div style="display:flex;align-items:center;gap:20px;flex-wrap:wrap;padding:14px;background:var(--card);border-radius:10px;margin-bottom:14px">
       <div>
-        <div style="font-size:0.68rem;color:var(--muted);margin-bottom:2px">구간 증감 (${minStr})</div>
-        <div style="font-size:1.5rem;font-weight:800;color:${color}">${arrow} ${info.diffVal>=0?'+':''}${fmt(info.diffVal)}</div>
+        <div style="font-size:0.65rem;color:var(--muted);margin-bottom:3px">최근 구간 증감 (${minStr})</div>
+        <div style="font-size:1.6rem;font-weight:800;color:${color}">${arrow} ${info.diffVal>=0?'+':''}${fmt(info.diffVal)}</div>
       </div>
       <div>
-        <div style="font-size:0.68rem;color:var(--muted);margin-bottom:2px">시간당 페이스</div>
+        <div style="font-size:0.65rem;color:var(--muted);margin-bottom:3px">시간당 페이스</div>
         <div style="font-size:1.1rem;font-weight:700;color:${color}">${fmt(Math.round(info.perHour))}/h</div>
       </div>
       <div>
-        <div style="font-size:0.68rem;color:var(--muted);margin-bottom:2px">분당 페이스</div>
-        <div style="font-size:0.9rem;font-weight:600;color:var(--text)">${fmt(Math.round(info.perHour/60))}/m</div>
+        <div style="font-size:0.65rem;color:var(--muted);margin-bottom:3px">분당 페이스</div>
+        <div style="font-size:0.9rem;font-weight:600">${fmt(Math.round(info.perHour/60))}/m</div>
       </div>
-      <div style="margin-left:auto;text-align:right">
-        <div style="font-size:0.68rem;color:var(--muted)">${tFmt(info.prevTime)} → ${tFmt(info.currTime)}</div>
-        <div style="font-size:0.75rem;color:var(--muted)">${fmt(info.prevVal)} → ${fmt(info.currVal)}</div>
+      <div style="margin-left:auto;font-size:0.72rem;color:var(--muted);text-align:right">
+        <div>${tFmt(info.prevTime.getTime())} → ${tFmt(info.currTime.getTime())}</div>
+        <div style="margin-top:2px">${fmt(info.prevVal)} → ${fmt(info.currVal)}</div>
       </div>
+    </div>`;
+  } else {
+    paceHtml = `<div style="color:var(--muted);font-size:0.8rem;padding:10px 0">실적을 2회 이상 입력(엔터)하면 구간 페이스가 표시됩니다</div>`;
+  }
+
+  // 전체 입력 히스토리 테이블
+  let histHtml = '';
+  if (log.length > 0) {
+    const rows = [...log].reverse().map((entry, i, arr) => {
+      const prev = arr[i+1];
+      const dv = prev ? entry.val - prev.val : null;
+      const dm = prev ? (entry.ts - prev.ts)/60000 : null;
+      const ph = (dv !== null && dm > 0) ? dv/(dm/60) : null;
+      const dvColor = dv > 0 ? 'var(--success)' : dv < 0 ? 'var(--danger)' : 'var(--muted)';
+      return `<tr>
+        <td style="color:var(--muted);font-size:0.78rem">${log.length - i}</td>
+        <td style="font-weight:600;color:var(--accent2)">${dtFmt(entry.ts)}</td>
+        <td style="font-weight:700">${fmtNum(entry.val)} 엔</td>
+        <td style="color:${dvColor};font-weight:600">${dv!==null?(dv>=0?'+':'')+fmt(dv):'—'}</td>
+        <td style="color:var(--muted);font-size:0.75rem">${dm!==null?dm.toFixed(0)+'분':'—'}</td>
+        <td style="color:${dvColor}">${ph!==null?fmt(Math.round(ph))+'/h':'—'}</td>
+      </tr>`;
+    }).join('');
+
+    histHtml = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+      <span style="font-size:0.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em">입력 기록 (총 ${log.length}회)</span>
+      <button onclick="clearLog('${brand}')" style="background:none;border:1px solid var(--border);color:var(--muted);padding:2px 10px;border-radius:6px;cursor:pointer;font-size:0.72rem">기록 초기화</button>
     </div>
-    ${history ? `<div style="font-size:0.7rem;color:var(--muted);margin-bottom:4px">입력 히스토리</div>${history}` : ''}
-  `;
+    <table style="width:100%;border-collapse:collapse;font-size:0.82rem">
+      <thead><tr style="border-bottom:1px solid var(--border)">
+        <th style="text-align:left;padding:6px 8px;color:var(--muted);font-size:0.68rem">#</th>
+        <th style="text-align:left;padding:6px 8px;color:var(--muted);font-size:0.68rem">기록 시각</th>
+        <th style="text-align:left;padding:6px 8px;color:var(--muted);font-size:0.68rem">실적</th>
+        <th style="text-align:left;padding:6px 8px;color:var(--muted);font-size:0.68rem">구간 증감</th>
+        <th style="text-align:left;padding:6px 8px;color:var(--muted);font-size:0.68rem">경과</th>
+        <th style="text-align:left;padding:6px 8px;color:var(--muted);font-size:0.68rem">구간 페이스</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+  }
+
+  box.innerHTML = paceHtml + histHtml;
+}
+
+function clearLog(brand) {
+  if (!confirm(`${brand} 입력 기록을 초기화할까요?`)) return;
+  paceLogs[brand] = [];
+  save();
+  renderPaceBox(brand);
 }
 
 // ───────── 입력 핸들러 ─────────
