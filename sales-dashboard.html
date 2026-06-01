@@ -40,6 +40,8 @@ body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', syste
 .header-right { display: flex; align-items: center; gap: 14px; }
 #clock { font-size: 0.82rem; color: var(--muted); }
 
+.io-btn { background: var(--card); border: 1px solid var(--border); border-radius: 8px; color: var(--text); padding: 6px 11px; font-size: 0.76rem; font-weight: 600; cursor: pointer; }
+.io-btn:hover { border-color: var(--accent); color: var(--accent); }
 /* date selector */
 .date-select { background: var(--card); border: 1px solid var(--border); border-radius: 8px; color: var(--text); padding: 6px 12px; font-size: 0.82rem; outline: none; cursor: pointer; }
 .today-badge { background: var(--accent); color: #fff; font-size: 0.68rem; padding: 2px 8px; border-radius: 20px; font-weight: 700; }
@@ -144,6 +146,7 @@ body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', syste
 <div class="header">
   <h1>📊 브랜드 매출 시뮬레이터</h1>
   <div class="header-right">
+    <button class="io-btn" onclick="exportData()" title="기록을 JSON으로 저장 (통합 대시보드로 이전용)">⬇ 내보내기</button>
     <select class="date-select" id="datePicker"></select>
     <span class="today-badge" id="todayBadge" style="display:none">TODAY</span>
     <div id="clock">--:--:--</div>
@@ -679,6 +682,18 @@ function renderAllTab() {
       <td style="color:${d>=0?'var(--success)':'var(--danger)'};font-weight:600">${d>=0?'+':''}${fmt(Math.round(d))}</td>
     </tr>`;
   }).join('');
+}
+
+// ───────── 데이터 내보내기 (통합 대시보드로 이전) ─────────
+function exportData() {
+  const payload = { actualsByDate, selectedDate, paceLogsByDate, _exportedAt: new Date().toISOString() };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `gmv-data-${new Date().toISOString().slice(0,10)}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 // ───────── 저장/불러오기 ─────────
